@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Body Tracker</title>
+
+  <link rel="manifest" href="manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Body Tracker">
+  <link rel="apple-touch-icon" href="icon.svg">
+  <meta name="theme-color" content="#6d28d9">
+
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<div id="app">
+
+  <!-- ── Dashboard screen ────────────────────────────────────────────────── -->
+  <div class="screen" v-show="currentScreen === 'dashboard'">
+    <div class="header">
+      <h1>Dashboard</h1>
+      <p>Your progress at a glance</p>
+    </div>
+
+    <!-- Time range toggle -->
+    <div class="toggle-group dashboard-range-toggle">
+      <button
+        v-for="range in DASHBOARD_RANGES"
+        :key="range.value"
+        class="toggle-btn"
+        :class="{ active: dashboardDateRange === range.value }"
+        @click="dashboardDateRange = range.value"
+      >
+        {{ range.label }}
+      </button>
+    </div>
+
+    <!-- Empty state -->
+    <div class="empty-state" v-if="appData.entries.length === 0">
+      <div class="icon">📊</div>
+      <p>No data yet.<br>Tap Log to record your first entry!</p>
+    </div>
+
+    <div class="empty-state" v-else-if="trackedMeasurements.length === 0">
+      <div class="icon">⚙️</div>
+      <p>No measurements selected.<br>Go to Settings to choose what to track.</p>
+    </div>
+
+    <!-- One card per tracked measurement -->
+    <div
+      v-else
+      v-for="key in trackedMeasurements"
+      :key="key"
+      class="dashboard-card"
+    >
+      <div class="dashboard-card-header">
+        <div class="dashboard-card-title">
+          <span class="dashboard-card-icon">{{ MEASUREMENTS_CONFIG[key].icon }}</span>
+          <span class="dashboard-card-name">{{ MEASUREMENTS_CONFIG[key].label }}</span>
+        </div>
+        <div class="dashboard-card-value" v-if="dashboardData[key]?.current != null">
+          {{ dashboardData[key].current }}
+          <small style="font-size: 12px; font-weight: 400; color: var(--text-muted)">
+            {{ unitFor(key) }}
+          </small>
+        </div>
+      </div>
+
+      <!-- Trend message -->
+      <div
+        class="trend-message"
+        v-if="dashboardData[key]?.values.length >= 2"
+        :style="{ color: dashboardData[key].trendInfo.color }"
+      >
+        <span class="trend-emoji">{{ dashboardData[key].trendInfo.emoji }}</span>
+        {{ dashboardData[key].trendInfo.text }}
+      </div>
+
+      <!-- Numerical change summary -->
+      <div class="trend-change" v-if="dashboardData[key]?.change !== null">
+        {{ dashboardData[key].values[0] }} → {{ dashboardData[key].current }}
+        <span :style="{ color: dashboardData[key].trendInfo.color }">
+          ({{ dashboardData[key].change > 0 ? '+' : '' }}{{ dashboardData[key].change }}
+          {{ unitFor(key) }}
+          <template v-if="dashboardData[key].changePct !== null">
+            , {{ dashboardData[key].changePct > 0 ? '+' : '' }}{{ dashboardData[key].changePct }}%
+          </template>)
+        </span>
+      </div>
+
+      <!-- Mini chart -->
+      <div class="mini-chart-wrapper" v-if="dashboardData[key]?.values.length >= 2">
+        <canvas :ref="el => setDashboardCanvasRef(key, el)"></canvas>
+      </div>
+      <div class="mini-chart-empty" v-else>
+        {{ dashboardData[key]?.values.length === 1
+            ? 'Log one more entry to see a trend'
+            : 'No data for this period' }}
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Log screen ──────────────────────────────────────────────────────── -->
+  <div class="screen" v-show="currentScreen === 'log'">
+    <div class="header">
+      <h1>Log Entry</h1>
+      <p>Record your measurements</p>
+    </div>
+
+    <div class="card">
+      <label class="field-label">Date</label>
+      <input type="date" v-model="entryDate">
+    </div>
+
+    <div class="card" v-if="trackedMeasurements.length === 0">
+      <p class="no-measurements">
+        No measurements selected.<br>
+        Go to Settings to choose what to track.
+      </p>
+    </div>
+
+    <div class="card" v-else>
+      <div
+        v-for="key in trackedMeasurements"
+        :key="key"
+        class="measure-row"
+      >
+        <span class="measure-icon">{{ MEASUREMENTS_CONFIG[key].icon }}</span>
+        <span class="measure-label">{{ MEASUREMENTS_CONFIG[key].label }}</span>
+        <input
+          class="measure-input"
+          type="number"
+          step="0.1"
+          min="0"
+          inputmode="decimal"
+          placeholder="—"
+          v-model="logInputs[key]"
+        >
+        <span class="measure-unit">{{ unitFor(key) }}</span>
+      </div>
+    </div>
+
+    <button class="btn" @click="saveEntry" v-if="trackedMeasurements.length > 0">
+      Save Entry
+    </button>
+  </div>
+
+  <!-- ── History screen ──────────────────────────────────────────────────── -->
+  <div class="screen" v-show="currentScreen === 'history'">
+    <div class="header">
+      <h1>History</h1>
+      <p>All your logged entries</p>
+    </div>
+
+    <div class="empty-state" v-if="sortedEntries.length === 0">
+      <div class="icon">📋</div>
+      <p>No entries yet.<br>Start by logging some measurements!</p>
+    </div>
+
+    <div
+      v-for="entry in sortedEntries"
+      :key="entry.date"
+      class="entry-item"
+      :class="{ open: openEntries.has(entry.date) }"
+      @click="toggleEntry(entry.date)"
+    >
+      <div class="entry-header">
+        <div>
+          <div class="entry-date">{{ formatDate(entry.date) }}</div>
+          <div class="entry-preview">{{ entryPreview(entry) }}</div>
+        </div>
+        <span class="entry-chevron">▼</span>
+      </div>
+
+      <div class="entry-details" v-show="openEntries.has(entry.date)">
+        <template v-for="(val, key) in entry.measurements" :key="key">
+          <div class="detail-row" v-if="MEASUREMENTS_CONFIG[key]">
+            <span class="detail-label">{{ MEASUREMENTS_CONFIG[key].label }}</span>
+            <span>{{ measurementToDisplay(val) }} {{ unitFor(key) }}</span>
+          </div>
+        </template>
+        <div class="entry-actions">
+          <button class="delete-btn" @click.stop="deleteEntry(entry.date)">
+            Delete entry
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Charts screen ───────────────────────────────────────────────────── -->
+  <div class="screen" v-show="currentScreen === 'charts'">
+    <div class="header">
+      <h1>Charts</h1>
+      <p>Explore a single measurement</p>
+    </div>
+
+    <div class="card" v-if="chartMeasurementOptions.length === 0">
+      <p class="no-measurements">No measurements selected in Settings.</p>
+    </div>
+
+    <template v-else>
+      <div class="card">
+        <label class="field-label">Measurement</label>
+        <select v-model="chartKey">
+          <option
+            v-for="opt in chartMeasurementOptions"
+            :key="opt.value"
+            :value="opt.value"
+          >
+            {{ opt.label }}
+          </option>
+        </select>
+      </div>
+
+      <div class="card">
+        <div class="toggle-group">
+          <button
+            v-for="range in DATE_RANGES"
+            :key="range.value"
+            class="toggle-btn"
+            :class="{ active: chartDateRange === range.value }"
+            @click="chartDateRange = range.value"
+          >
+            {{ range.label }}
+          </button>
+        </div>
+
+        <div class="chart-wrapper">
+          <span class="chart-empty" v-if="chartPoints.values.length === 0">
+            No data for this period
+          </span>
+          <canvas ref="chartCanvas" v-show="chartPoints.values.length > 0"></canvas>
+        </div>
+
+        <div class="stats-row" v-if="chartStats">
+          <div class="stat-card">
+            <div class="stat-value">{{ chartStats.current }}</div>
+            <div class="stat-label">Current</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" :style="{ color: chartStats.changeColor }">
+              {{ chartStats.change }}
+            </div>
+            <div class="stat-label">Change</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="font-size: 13px">{{ chartStats.range }}</div>
+            <div class="stat-label">Range</div>
+          </div>
+        </div>
+      </div>
+    </template>
+  </div>
+
+  <!-- ── Settings screen ─────────────────────────────────────────────────── -->
+  <div class="screen" v-show="currentScreen === 'settings'">
+    <div class="header">
+      <h1>Settings</h1>
+      <p>Units &amp; measurements</p>
+    </div>
+
+    <p class="section-label">Measurements to Track</p>
+    <div class="card">
+      <label
+        v-for="(cfg, key) in MEASUREMENTS_CONFIG"
+        :key="key"
+        class="checkbox-row"
+      >
+        <input
+          type="checkbox"
+          :checked="appData.settings.trackedMeasurements.includes(key)"
+          @change="toggleMeasurement(key, $event.target.checked)"
+        >
+        <span class="checkbox-label">{{ cfg.icon }} {{ cfg.label }}</span>
+      </label>
+    </div>
+
+    <p class="section-label">Data</p>
+    <div class="card">
+      <button class="btn btn-danger" @click="clearAllData">Clear All Data</button>
+    </div>
+    <div style="height: 8px"></div>
+  </div>
+
+  <!-- ── Bottom navigation ────────────────────────────────────────────────── -->
+  <nav class="nav">
+    <button
+      class="nav-btn"
+      :class="{ active: currentScreen === 'dashboard' }"
+      @click="navigate('dashboard')"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="7" height="7" rx="1"/>
+        <rect x="14" y="3" width="7" height="7" rx="1"/>
+        <rect x="3" y="14" width="7" height="7" rx="1"/>
+        <rect x="14" y="14" width="7" height="7" rx="1"/>
+      </svg>
+      Home
+    </button>
+
+    <button
+      class="nav-btn"
+      :class="{ active: currentScreen === 'log' }"
+      @click="navigate('log')"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <circle cx="12" cy="12" r="9"/>
+        <path d="M12 8v8M8 12h8"/>
+      </svg>
+      Log
+    </button>
+
+    <button
+      class="nav-btn"
+      :class="{ active: currentScreen === 'history' }"
+      @click="navigate('history')"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2"/>
+        <rect x="9" y="3" width="6" height="4" rx="1"/>
+        <path d="M9 12h6M9 16h4"/>
+      </svg>
+      History
+    </button>
+
+    <button
+      class="nav-btn"
+      :class="{ active: currentScreen === 'charts' }"
+      @click="navigate('charts')"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+      </svg>
+      Charts
+    </button>
+
+    <button
+      class="nav-btn"
+      :class="{ active: currentScreen === 'settings' }"
+      @click="navigate('settings')"
+    >
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="3"/>
+        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/>
+      </svg>
+      Settings
+    </button>
+  </nav>
+
+  <!-- ── Toast notification ───────────────────────────────────────────────── -->
+  <div class="toast" :class="{ show: toastVisible }">{{ toastMessage }}</div>
+
+</div>
+
+<!-- Dependencies -->
+<script src="https://cdn.jsdelivr.net/npm/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+
+<!-- App modules (order matters) -->
+<script src="js/config.js"></script>
+<script src="js/units.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>

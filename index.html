@@ -280,6 +280,17 @@
       </label>
     </div>
 
+    <p class="section-label">Export</p>
+    <div class="card">
+      <p style="font-size:13px;color:var(--text-muted);margin-bottom:12px">
+        Download a copy of your data as a backup or to open in a spreadsheet.
+      </p>
+      <div style="display:flex;gap:8px">
+        <button class="btn" style="flex:1" @click="exportJSON">Export JSON</button>
+        <button class="btn" style="flex:1" @click="exportCSV">Export CSV</button>
+      </div>
+    </div>
+
     <p class="section-label">Data</p>
     <div class="card">
       <button class="btn btn-danger" @click="clearAllData">Clear All Data</button>

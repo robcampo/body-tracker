@@ -349,6 +349,35 @@ createApp({
 
     // ── Settings screen ──────────────────────────────────────────────────────
 
+    function exportJSON() {
+      if (appData.entries.length === 0) { showToast('No data to export'); return; }
+      const payload = JSON.stringify({ settings: appData.settings, entries: appData.entries }, null, 2);
+      triggerDownload(payload, `body-tracker-${todayISO()}.json`, 'application/json');
+      showToast('JSON downloaded');
+    }
+
+    function exportCSV() {
+      if (appData.entries.length === 0) { showToast('No data to export'); return; }
+      const keys = Object.keys(MEASUREMENTS_CONFIG);
+      const header = ['Date', ...keys.map(k => `${MEASUREMENTS_CONFIG[k].label} (${unitFor(k)})`)];
+      const rows = [...appData.entries]
+        .sort((a, b) => a.date.localeCompare(b.date))
+        .map(entry => [
+          entry.date,
+          ...keys.map(k => entry.measurements[k] != null ? measurementToDisplay(entry.measurements[k]) : ''),
+        ]);
+      const csv = [header, ...rows].map(row => row.join(',')).join('\n');
+      triggerDownload(csv, `body-tracker-${todayISO()}.csv`, 'text/csv');
+      showToast('CSV downloaded');
+    }
+
+    function triggerDownload(content, filename, mimeType) {
+      const url = URL.createObjectURL(new Blob([content], { type: mimeType }));
+      const a   = Object.assign(document.createElement('a'), { href: url, download: filename });
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
     function toggleMeasurement(key, checked) {
       const list = appData.settings.trackedMeasurements;
       if (checked) {
@@ -412,7 +441,7 @@ createApp({
 
       // Methods
       navigate, saveEntry, deleteEntry, toggleEntry,
-      toggleMeasurement, clearAllData,
+      toggleMeasurement, clearAllData, exportJSON, exportCSV,
       setDashboardCanvasRef,
       unitFor, entryPreview, formatDate, measurementToDisplay,
     };

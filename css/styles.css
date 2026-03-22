@@ -414,6 +414,35 @@ select {
   transform: translateX(-50%) translateY(0);
 }
 
+/* ── Dashboard hero ────────────────────────────────────────────────────────── */
+
+.app-hero {
+  text-align: center;
+  padding: 28px 16px 20px;
+}
+
+.app-hero-icon {
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  margin-bottom: 12px;
+}
+
+.app-hero-name {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin-bottom: 6px;
+}
+
+.app-hero-desc {
+  font-size: 14px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  max-width: 300px;
+  margin: 0 auto;
+}
+
 /* ── Dashboard ─────────────────────────────────────────────────────────────── */
 
 .dashboard-range-toggle {

@@ -207,6 +207,16 @@ select {
 .btn.btn-danger       { background: var(--danger); }
 .btn.btn-danger:active { background: #b91c1c; }
 
+.edit-btn {
+  background: none;
+  border: 1px solid var(--primary);
+  color: var(--primary);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 5px 14px;
+  border-radius: 7px;
+}
+
 .delete-btn {
   background: none;
   border: 1px solid var(--danger);
@@ -296,6 +306,7 @@ select {
 .entry-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   margin-top: 10px;
 }
 

@@ -245,6 +245,11 @@ createApp({
       openEntries.has(date) ? openEntries.delete(date) : openEntries.add(date);
     }
 
+    function editEntry(date) {
+      entryDate.value = date;
+      navigate('log');
+    }
+
     function deleteEntry(date) {
       if (!confirm(`Delete entry for ${formatDate(date)}?`)) return;
       const idx = appData.entries.findIndex(e => e.date === date);
@@ -440,7 +445,7 @@ createApp({
       chartMeasurementOptions, chartPoints, chartStats, dashboardData,
 
       // Methods
-      navigate, saveEntry, deleteEntry, toggleEntry,
+      navigate, saveEntry, editEntry, deleteEntry, toggleEntry,
       toggleMeasurement, clearAllData, exportJSON, exportCSV,
       setDashboardCanvasRef,
       unitFor, entryPreview, formatDate, measurementToDisplay,

@@ -185,6 +185,9 @@
           </div>
         </template>
         <div class="entry-actions">
+          <button class="edit-btn" @click.stop="editEntry(entry.date)">
+            Edit entry
+          </button>
           <button class="delete-btn" @click.stop="deleteEntry(entry.date)">
             Delete entry
           </button>

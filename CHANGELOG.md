@@ -1,15 +1,15 @@
 # Changelog
 
-## [Unreleased]
-
 ## [2026-04-02]
-- Added "Edit entry" button in History screen to navigate to the Log screen with measurements pre-filled
+- Added "Edit entry" button in History screen — tap to go to Log with measurements pre-filled
 
-## [Earlier]
-- Added app name and description to dashboard
-- Removed clear all data button
-- Added export data (JSON and CSV)
-- Used icon as favicon
+## [2026-03-22]
+- Added app name, icon, and description to the Dashboard screen
+
+## [2026-03-21]
+- Added JSON and CSV export in Settings
+- Removed "Clear all data" button
+- Added PWA home screen icons (180px, 512px)
+- Set app icon as browser favicon
 - Added README
-- Added home screen icons
-- Initial app
+- Initial release: measurement logging, history, charts, dashboard, and settings
